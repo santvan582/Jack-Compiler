@@ -1,15 +1,13 @@
 package JackAnalyzer;
 
 
-import java.io.File;
-import java.io.FileNotFoundException; 
-import java.util.Scanner;         
+import java.io.File;        
 
 public class JackAnalyzer {
-    public static void main(String[] args) { 
+    public static void main(String[] args) {
+        System.out.println("Starting JackAnalyzer...");
 
-         if (args.length != 1){
-
+        if (args.length != 1) {
             System.out.println("No input file or directory provided. Please provide a .jack file or a directory containing .jack files.");
 
         }else {
@@ -21,37 +19,15 @@ public class JackAnalyzer {
                 File[] files = file.listFiles((dir, name) -> name.endsWith(".jack"));
                 if (files != null) {
                     for (File jackFile : files) {
-                        processFile(jackFile);
+                        new Tokenizer(jackFile);
                     }
                 }
             } else if (file.isFile() && inputFile.endsWith(".jack")) {
-                processFile(file);
+                new Tokenizer(file);
             } else {
-                System.out.println("Invalid input. Please provide a .jack file or a directory containing .jack files.");
+                System.out.println("Invalid input for path " + inputFile );
             }
         }
     }
-
-    private static void processFile(File jackFile) {
-        try {
-            Scanner scanner = new Scanner(jackFile);
-            StringBuilder content = new StringBuilder();
-            while (scanner.hasNextLine()) {
-                content.append(scanner.nextLine()).append("\n");
-            }
-            scanner.close();
-
-            // Here you would typically call the CompilationEngine or other processing classes
-            // For demonstration, we will just print the content of the file
-            System.out.println("Processing file: " + jackFile.getName());
-            System.out.println(content.toString());
-
-        } catch (FileNotFoundException e) {
-            System.out.println("File not found: " + jackFile.getAbsolutePath());
-        }
-    }
-
-   
-    
     
 } 
