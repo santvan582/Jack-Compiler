@@ -1,7 +1,9 @@
 package JackAnalyzer;
 
 
-import java.io.File;        
+import java.io.File;
+
+
 
 public class JackAnalyzer {
     public static void main(String[] args) {
@@ -19,11 +21,11 @@ public class JackAnalyzer {
                 File[] files = file.listFiles((dir, name) -> name.endsWith(".jack"));
                 if (files != null) {
                     for (File jackFile : files) {
-                        new Tokenizer(jackFile);
+                        new JackTokenizer(jackFile);
                     }
                 }
             } else if (file.isFile() && inputFile.endsWith(".jack")) {
-                new Tokenizer(file);
+                new JackTokenizer(file);
             } else {
                 System.out.println("Invalid input for path " + inputFile );
             }
