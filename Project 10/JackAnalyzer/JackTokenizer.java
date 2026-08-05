@@ -8,14 +8,15 @@ import java.util.ArrayList;
 public class JackTokenizer {
 
     private File mFile;
-    String fileContent;
+    private String fileContent;
     static String keyWords = "class|constructor|function|method|field|static|var|int|char|boolean|void|true|false|null|this|let|do|if|else|while|return";
     static String symbols = "[\\&\\*\\+\\(\\)\\.\\/\\,\\-\\]\\;\\~\\}\\|\\{\\>\\=\\[\\<]";
     static String intReg = "[0-9]+";
     static String strReg = "\"[^\"\n]*\"";
     static String idReg = "[\\w_]+";
-    static ArrayList<String> tokens = new ArrayList<>();
-    static String currentToken = "";
+    static String operators = "[\\&\\*\\+\\-\\~\\|\\>\\=\\<]";
+    private ArrayList<String> tokens = new ArrayList<>();
+    private String currentToken = "";
 
     public enum TokenType {
         KEYWORD,
@@ -48,6 +49,10 @@ public class JackTokenizer {
         FALSE,
         NULL,
         THIS;
+
+        public String toString() {
+            return this.name().toLowerCase();
+        }
 
         static Keyword fromString(String keyword) {
             switch (keyword) {
@@ -94,9 +99,14 @@ public class JackTokenizer {
                 case "this":
                     return THIS;
                 default:
-                    throw new IllegalArgumentException("Invalid keyword: " + keyword);
+                    return null;
             }
         }
+
+
+
+
+
     }
 
     public JackTokenizer(File jackFile) {
@@ -164,37 +174,37 @@ public class JackTokenizer {
 
         // Implement tokenization logic here
         boolean inString = false;
-        StringBuilder currentToken = new StringBuilder();
+        StringBuilder currentString = new StringBuilder();
 
         for (char c : content.toCharArray()) {
             // Process each character to identify tokens
             if (c == '"') {
                 inString = !inString; // Toggle string state
-                currentToken.append(c);
+                currentString.append(c);
                 if (!inString) {
                     // End of string token
-                    tokens.add(currentToken.toString());
-                    currentToken.setLength(0); // Reset current token
+                    tokens.add(currentString.toString());
+                    currentString.setLength(0); // Reset current token
                 }
             } else if (inString) {
-                currentToken.append(c); // Append character to string token
+                currentString.append(c); // Append character to string token
             } else if (Character.isWhitespace(c)) {
-                if (currentToken.length() > 0) {
-                    tokens.add(currentToken.toString());
+                if (currentString.length() > 0) {
+                    tokens.add(currentString.toString());
                     // System.out.println("String not type Token: " + currentToken.toString());
-                    currentToken.setLength(0); // Reset current token
+                    currentString.setLength(0); // Reset current token
                 }
             } else if (isSymbol(c)) {
                 //When a symbol is encountered, add the current token (if any) and the symbol as separate tokens
-                if (currentToken.length() > 0) {
-                    tokens.add(currentToken.toString());
+                if (currentString.length() > 0) {
+                    tokens.add(currentString.toString());
                     // System.out.println("Symbol current Token in : " + currentToken.toString());
-                    currentToken.setLength(0); // Reset current token
+                    currentString.setLength(0); // Reset current token
                 }
                 tokens.add(String.valueOf(c));
                 // System.out.println("Symbol Token: " + c);
             } else {
-                currentToken.append(c); // Append character to token
+                currentString.append(c); // Append character to token
             }
         }
 
@@ -236,6 +246,18 @@ public class JackTokenizer {
         return Keyword.fromString(currentToken);
     }
 
+    static boolean isParameterTypeKeyword(Keyword keyword) {
+        if (keyword == Keyword.INT || keyword == Keyword.BOOLEAN || keyword == Keyword.CHAR || keyword == Keyword.VOID) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    static boolean isOperator(char symbol) {
+        return String.valueOf(symbol).matches(operators);
+    }
+
     public char symbol() {
         if(tokenType() != TokenType.SYMBOL) {
             throw new IllegalStateException("Current token is not a symbol.");
@@ -262,5 +284,9 @@ public class JackTokenizer {
             throw new IllegalStateException("Current token is not a string constant.");
         }
         return currentToken.substring(1, currentToken.length() - 1); // Remove the enclosing double quotes
+    }
+
+    public String getCurrentToken() {
+        return currentToken;
     }
 }
