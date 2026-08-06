@@ -1,6 +1,5 @@
 package JackAnalyzer;
 
-
 import java.io.File;
 
 
@@ -21,18 +20,14 @@ public class JackAnalyzer {
                 File[] files = file.listFiles((dir, name) -> name.endsWith(".jack"));
                 if (files != null) {
                     for (File jackFile : files) {
-                        JackCompilationEngine compilationEngine = null;
+                        CompilationEngine compilationEngine = null;
                         try {
                             System.out.println("For File Name : " + jackFile.getName()+ "Absolute path is file: " + jackFile.getAbsolutePath());
                             File outputFile = new File(jackFile.getAbsolutePath().replace(".jack", ".xml"));
-                            compilationEngine = new JackCompilationEngine(jackFile, outputFile);
+                            compilationEngine = new CompilationEngine(jackFile, outputFile);
                         } catch (Exception e) {
                             System.out.println("Error processing file: " + jackFile.getName());
                             e.printStackTrace();
-                             if(compilationEngine != null){
-                              compilationEngine.close(); // Ensure the writer is closed after processing each file
-                              compilationEngine = null; // Reset the compilation engine for the next file
-                          }
                         }finally {
                           if(compilationEngine != null){
                               compilationEngine.close(); // Ensure the writer is closed after processing each file
@@ -46,11 +41,11 @@ public class JackAnalyzer {
                 }
             } else if (file.isFile() && inputFile.endsWith(".jack")) {
             
-                JackCompilationEngine compilationEngine = null;
+                CompilationEngine compilationEngine = null;
                 try {
                     System.out.println("For File Name : " + file.getName()+ "Absolute path is file: " + file.getAbsolutePath());
                     File outputFile = new File(file.getAbsolutePath().replace(".jack", ".xml"));
-                    compilationEngine = new JackCompilationEngine(file, outputFile);
+                    compilationEngine = new CompilationEngine(file, outputFile);
                 } catch (Exception e) {
                     System.out.println("Error processing file: " + file.getName());
                     e.printStackTrace();

@@ -14,7 +14,7 @@ public class JackTokenizer {
     static String intReg = "[0-9]+";
     static String strReg = "\"[^\"\n]*\"";
     static String idReg = "[\\w_]+";
-    static String operators = "[\\&\\*\\+\\-\\~\\|\\>\\=\\<]";
+    static String operators = "[\\&\\*\\/\\+\\-\\~\\|\\>\\=\\<]";
     private ArrayList<String> tokens = new ArrayList<>();
     private String currentToken = "";
 
