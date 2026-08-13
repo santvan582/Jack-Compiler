@@ -23,8 +23,9 @@ public class JackAnalyzer {
                         CompilationEngine compilationEngine = null;
                         try {
                             System.out.println("For File Name : " + jackFile.getName()+ "Absolute path is file: " + jackFile.getAbsolutePath());
-                            File outputFile = new File(jackFile.getAbsolutePath().replace(".jack", ".xml"));
-                            compilationEngine = new CompilationEngine(jackFile, outputFile);
+                            File xmlOutput = new File(jackFile.getAbsolutePath().replace(".jack", ".xml"));
+                            File vmOutput = new File(jackFile.getAbsolutePath().replace(".jack", ".vm"));
+                            compilationEngine = new CompilationEngine(jackFile, xmlOutput, vmOutput);
                         } catch (Exception e) {
                             System.out.println("Error processing file: " + jackFile.getName());
                             e.printStackTrace();
@@ -45,7 +46,8 @@ public class JackAnalyzer {
                 try {
                     System.out.println("For File Name : " + file.getName()+ "Absolute path is file: " + file.getAbsolutePath());
                     File outputFile = new File(file.getAbsolutePath().replace(".jack", ".xml"));
-                    compilationEngine = new CompilationEngine(file, outputFile);
+                    File vmOutput = new File(file.getAbsolutePath().replace(".jack", ".vm"));
+                    compilationEngine = new CompilationEngine(file, outputFile, vmOutput);
                 } catch (Exception e) {
                     System.out.println("Error processing file: " + file.getName());
                     e.printStackTrace();
