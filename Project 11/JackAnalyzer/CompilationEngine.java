@@ -4,14 +4,18 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.util.HashMap;
 
+import JackAnalyzer.VMWriter.COMMAND;
+import JackAnalyzer.VMWriter.SEGMENT;
+
 
 
 public class CompilationEngine {
 
     private PrintWriter xmlWriter;
     private final JackTokenizer tokenizer;
-    private final PrintWriter vmWriter;
+    private final VMWriter vmWriter;
     private final SymbolTable symbolTable;
+    private String className;
     private final HashMap<Character, String> xmlEscapeSymbols = new HashMap<Character, String>() {{
         put('&', "&amp;");
         put('<', "&lt;");
@@ -19,10 +23,10 @@ public class CompilationEngine {
         put('"', "&quot;");
     }};
 
-    public CompilationEngine(File inputFile, File xmlOutput,File vmOutput) throws Exception {
+    public CompilationEngine(File inputFile, File xmlOutput,String vmOutput) throws Exception {
 
         this.xmlWriter = new PrintWriter(xmlOutput);
-        this.vmWriter = new PrintWriter(vmOutput);
+        this.vmWriter = new VMWriter(vmOutput);
         this.symbolTable = new SymbolTable();
         this.tokenizer = new JackTokenizer(inputFile);
         compileClass();
@@ -37,6 +41,8 @@ public class CompilationEngine {
 
             tokenizer.advance();
             writeIdentifierToken();
+            className = tokenizer.identifier();
+        
 
             tokenizer.advance();
             writeSymbolToken('{');
@@ -51,13 +57,15 @@ public class CompilationEngine {
            
             while(tokenizer.keyword() == JackTokenizer.Keyword.CONSTRUCTOR || 
                   tokenizer.keyword() == JackTokenizer.Keyword.FUNCTION || 
-                  tokenizer.keyword() == JackTokenizer.Keyword.METHOD) {
+                  tokenizer.keyword() == JackTokenizer.Keyword.METHOD) {    
                 compileSubroutine();
                 tokenizer.advance();
             }
 
             
             writeSymbolToken('}');
+
+            vmWriter.close(); // Close the VMWriter after finishing the compilation
 
             // Write the closing </class> tag to the output file
             xmlWriter.println("</class>");
@@ -109,34 +117,42 @@ public class CompilationEngine {
         xmlWriter.println("<subroutineDec>");
         //Wtite Field, Method or Constructor Keyword
         writeKeywordToken(tokenizer.keyword());
+
+        symbolTable.resetSubroutine(); // Reset the subroutine scope for each new subroutine
+        JackTokenizer.Keyword subroutineType = tokenizer.keyword(); // Store the subroutine type
         
+        String returnType = "";
         //Return Type Keyword or Identifier
         tokenizer.advance();
         if (JackTokenizer.isParameterTypeKeyword(tokenizer.keyword())){
             writeKeywordToken(tokenizer.keyword());
+            returnType = tokenizer.keyword().toString(); 
         }else{
             writeIdentifierToken();
+            returnType = tokenizer.identifier();
         }
-
 
         tokenizer.advance();
         //Subroutine Name Identifier
         writeIdentifierToken();
+
+        String subroutineName = tokenizer.identifier();
+        String fullSubroutineName = className + "." + subroutineName;
  
+
         tokenizer.advance();
         writeSymbolToken('(');
-        xmlWriter.println("<parameterList>"); 
+        xmlWriter.println("<parameterList>");
+
         tokenizer.advance();
         compileParameterList();
+        
+        
         xmlWriter.println("</parameterList>"); 
         writeSymbolToken(')');
 
 
-
-  
-
-
-        compileSubroutineBody();
+        compileSubroutineBody(fullSubroutineName, subroutineType);
 
         
 
@@ -149,21 +165,29 @@ public class CompilationEngine {
         if(!(JackTokenizer.isParameterTypeKeyword(tokenizer.keyword()) || tokenizer.tokenType() == JackTokenizer.TokenType.IDENTIFIER)){
             return;
         }
+
       
         if (JackTokenizer.isParameterTypeKeyword(tokenizer.keyword())){
            writeKeywordToken(tokenizer.keyword());
         } else{
             writeIdentifierToken();
         }
+
+        String type = tokenizer.tokenType() == JackTokenizer.TokenType.KEYWORD ? tokenizer.keyword().toString() : tokenizer.identifier();
             
         tokenizer.advance();
         writeIdentifierToken();
+
+        String name = tokenizer.identifier();
+        symbolTable.define(name, type, SymbolTable.KIND.ARG);
 
 
         tokenizer.advance();
         while(tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == ','){
             
             writeSymbolToken(',');
+
+
             tokenizer.advance();
             if (JackTokenizer.isParameterTypeKeyword(tokenizer.keyword())){
                 writeKeywordToken(tokenizer.keyword());
@@ -173,9 +197,14 @@ public class CompilationEngine {
                 throw new IllegalArgumentException(
                         "Expected parameter type (int, char, boolean) or identifier, but found: " + tokenizer.getCurrentToken());
             }
+            type = tokenizer.tokenType() == JackTokenizer.TokenType.KEYWORD ? tokenizer.keyword().toString() : tokenizer.identifier();
 
+            //Parameter Name Identifier
             tokenizer.advance();
             writeIdentifierToken();
+            name = tokenizer.identifier();
+            symbolTable.define(name, type, SymbolTable.KIND.ARG);
+
 
             tokenizer.advance();
         }
@@ -183,10 +212,10 @@ public class CompilationEngine {
     /**
      * Compiles a complete method function or constructor
      */
-    public void compileSubroutineBody() {
+    public void compileSubroutineBody(String funName,JackTokenizer.Keyword keyword) {
 
       xmlWriter.println("<subroutineBody>");
-      symbolTable.resetSubroutine(); // Reset the subroutine scope for each new subroutine
+     
       tokenizer.advance();
       writeSymbolToken('{');
        
@@ -195,7 +224,12 @@ public class CompilationEngine {
             compileVarDec();
             tokenizer.advance();
         }
-        
+
+
+         //Should  Write Main.main 0
+        //Initialize the function in the VM output with the number of local variables
+        vmWriter.writeFunction(funName,symbolTable.varCount(SymbolTable.KIND.ARG));
+
         compileStatements();
 
         if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '}') {
@@ -214,8 +248,7 @@ public class CompilationEngine {
         // Write the variable declaration to the output file
         xmlWriter.println("<varDec>");
         writeKeywordToken(tokenizer.keyword());
-        String kind = tokenizer.keyword().toString(); //Type of the variable
-
+    
         tokenizer.advance();
         // Write the type to the output file
         if (JackTokenizer.isParameterTypeKeyword(tokenizer.keyword())) {
@@ -234,15 +267,17 @@ public class CompilationEngine {
         writeIdentifierToken();
 
         String name = tokenizer.identifier();
-        symbolTable.define(name, type, SymbolTable.KIND.fromString(kind));
+        symbolTable.define(name, type, SymbolTable.KIND.VAR);
 
         tokenizer.advance();
         
         while (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == ',') {
             writeSymbolToken(',');
             tokenizer.advance();
+
             writeIdentifierToken();
-            symbolTable.define(tokenizer.identifier(), type, SymbolTable.KIND.fromString(kind));
+            symbolTable.define(tokenizer.identifier(), type, SymbolTable.KIND.VAR);
+            
             tokenizer.advance();
         }
         writeSymbolToken(';');
@@ -287,15 +322,21 @@ public class CompilationEngine {
 
         tokenizer.advance();
         writeIdentifierToken();
+       
+        String varName = tokenizer.identifier();
+
 
         tokenizer.advance();
 
-        if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '[') {
+        while (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '[') {
             writeSymbolToken('[');
     
+            vmWriter.writePush(VMWriter.SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)), symbolTable.indexOf(varName));
+
             tokenizer.advance();
             compileExpression();
 
+            vmWriter.writeArithmetic(COMMAND.ADD);
             writeSymbolToken(']');
             tokenizer.advance();
         }
@@ -390,28 +431,39 @@ public class CompilationEngine {
         tokenizer.advance();
         writeIdentifierToken();
 
+        //Store Outuput 
+        String name1 = tokenizer.identifier();
+
         tokenizer.advance();
+
         if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '(') {
             writeSymbolToken('(');
+            vmWriter.writePush(VMWriter.SEGMENT.POINTER,0);
 
             tokenizer.advance();
             compileExpressionList();
 
          
             writeSymbolToken(')');
+           
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '.') {
             writeSymbolToken('.');
 
             tokenizer.advance();
             writeIdentifierToken();
+           
+            //Store Println
+            String name2 = tokenizer.identifier();
             
             tokenizer.advance();
             writeSymbolToken('(');
          
            tokenizer.advance();
-           compileExpressionList();
+           int nArgs = compileExpressionList();
        
            writeSymbolToken(')');
+           String fullName = name1 + "." + name2;
+            vmWriter.writeCall(fullName, nArgs);
         } else {
             throw new IllegalArgumentException(
                     "Expected '(' or '.' after subroutine name, but found: " + tokenizer.getCurrentToken());
@@ -420,7 +472,8 @@ public class CompilationEngine {
 
         tokenizer.advance();
         writeSymbolToken(';');
-
+        vmWriter.writePop(VMWriter.SEGMENT.TEMP,0);
+        
         xmlWriter.println("</doStatement>");
          
     }
@@ -433,10 +486,14 @@ public class CompilationEngine {
         tokenizer.advance();
         if (tokenizer.tokenType() != JackTokenizer.TokenType.SYMBOL || tokenizer.symbol() != ';') {
             compileExpression();
+        }else{
+            //no expression push 0 to stack
+            vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,0);
         }
-
+       
         writeSymbolToken(';');
-
+        
+        vmWriter.writeReturn();
         xmlWriter.println("</returnStatement>");
     }
 
@@ -452,8 +509,14 @@ public class CompilationEngine {
       
         while (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && JackTokenizer.isOperator(tokenizer.symbol())) {
             writeSymbolToken(tokenizer.symbol());
+            //Store the operator for VM command
+            VMWriter.COMMAND vmCommand = VMWriter.COMMAND.getCommandFromOp(tokenizer.symbol());
             tokenizer.advance();
+
             compileTerm();
+            
+            vmWriter.writeArithmetic(vmCommand);
+            
         }
 
         xmlWriter.println("</expression>");
@@ -469,6 +532,18 @@ public class CompilationEngine {
         xmlWriter.println("<term>");
         if (tokenizer.tokenType() == JackTokenizer.TokenType.INT_CONST || 
             tokenizer.tokenType() == JackTokenizer.TokenType.STRING_CONST) {
+            if (tokenizer.tokenType() == JackTokenizer.TokenType.INT_CONST) {
+                vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,tokenizer.intVal());
+            }else{
+               String str = tokenizer.stringVal();
+               vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,str.length());
+               vmWriter.writeCall("String.new",1);
+               for (int i = 0; i < str.length(); i++){
+                    vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,(int)str.charAt(i));
+                    vmWriter.writeCall("String.appendChar",2);
+                }
+            }   
+           
             writeConstantToken();
             tokenizer.advance();
         } else if (
@@ -482,9 +557,12 @@ public class CompilationEngine {
 
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.IDENTIFIER) {
             writeIdentifierToken();
+            String varName = tokenizer.identifier();
+
             tokenizer.advance();
             if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '[') {
                 writeSymbolToken('[');
+                vmWriter.writePush(SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)),symbolTable.indexOf(varName));
 
                 tokenizer.advance();
                 compileExpression();
@@ -492,6 +570,14 @@ public class CompilationEngine {
                 
                 writeSymbolToken(']');
                 tokenizer.advance();
+
+                //base+offset
+                vmWriter.writeArithmetic(VMWriter.COMMAND.ADD);
+
+                //pop into 'that' pointer
+                vmWriter.writePop(VMWriter.SEGMENT.POINTER,1);
+                //push *(base+index) onto stack
+                vmWriter.writePush(VMWriter.SEGMENT.THAT,0);
             }else if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && (tokenizer.symbol() == '(' || tokenizer.symbol() == '.')) {
                 
                 writeSymbolToken(tokenizer.symbol());
@@ -507,6 +593,8 @@ public class CompilationEngine {
                 
                 writeSymbolToken(')');
                 tokenizer.advance();
+            }else{
+               vmWriter.writePush(SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)),symbolTable.indexOf(varName));
             }
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '(') {
             writeSymbolToken('(');
@@ -531,21 +619,24 @@ public class CompilationEngine {
     }
        
 
-    public void compileExpressionList() {
+    public int compileExpressionList() {
+        int nArgs = 0;
        
         xmlWriter.println("<expressionList>");
         
 
         if (tokenizer.tokenType() != JackTokenizer.TokenType.SYMBOL || tokenizer.symbol() != ')') {
             compileExpression();
+            nArgs++;
             while (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == ',') {
                 writeSymbolToken(',');
-                
+                nArgs++;
                 tokenizer.advance();
                 compileExpression();
             }
         }
         xmlWriter.println("</expressionList>");
+        return nArgs;
     }
 
     public void close(){
@@ -600,4 +691,6 @@ public class CompilationEngine {
         }
         return String.valueOf(value);
     }
+
+
 }
