@@ -230,6 +230,20 @@ public class CompilationEngine {
         //Initialize the function in the VM output with the number of local variables
         vmWriter.writeFunction(funName,symbolTable.varCount(SymbolTable.KIND.ARG));
 
+         //METHOD and CONSTRUCTOR load with this pointer and allocate memory for constructor
+        if (keyword == JackTokenizer.Keyword.METHOD){
+            //A Jack method with k arguments is compiled into a VM function that operates on k + 1 arguments.
+            // The first argument (argument number 0) always refers to the this object.
+            vmWriter.writePush(VMWriter.SEGMENT.ARGUMENT, 0);
+            vmWriter.writePop(VMWriter.SEGMENT.POINTER,0);
+
+        }else if (keyword == JackTokenizer.Keyword.CONSTRUCTOR){
+            //A Jack function or constructor with k arguments is compiled into a VM function that operates on k arguments.
+            vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,symbolTable.varCount(SymbolTable.KIND.FIELD));
+            vmWriter.writeCall("Memory.alloc", 1);
+            vmWriter.writePop(VMWriter.SEGMENT.POINTER,0);
+        }
+        
         compileStatements();
 
         if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '}') {
@@ -293,20 +307,23 @@ public class CompilationEngine {
             JackTokenizer.Keyword keyword = tokenizer.keyword();
             if (keyword == JackTokenizer.Keyword.LET) {
                 compileLet();
+                tokenizer.advance();
             } else if (keyword == JackTokenizer.Keyword.IF) {
                 compileIf();
             } else if (keyword == JackTokenizer.Keyword.WHILE) {
                 compileWhile();
+                tokenizer.advance();
             } else if (keyword == JackTokenizer.Keyword.DO) {
                 compileDo();
+                tokenizer.advance();
             } else if (keyword == JackTokenizer.Keyword.RETURN) {
                 compileReturn();
+                tokenizer.advance();
             } else {
-               
                 // If the token is not a statement keyword,assume we've reached the end of statements
                 break;
             }
-            tokenizer.advance(); // Advance to the next token after compiling a statement
+            // Advance to the next token after compiling a statement
         }
         xmlWriter.println("</statements>");
     }
@@ -347,6 +364,7 @@ public class CompilationEngine {
         compileExpression();
 
         writeSymbolToken(';');
+        
 
         xmlWriter.println("</letStatement>");
     }
@@ -374,21 +392,21 @@ public class CompilationEngine {
         tokenizer.advance();
         compileStatements();
 
-      
         writeSymbolToken('}');
 
+
+        tokenizer.advance();
         if (tokenizer.tokenType() == JackTokenizer.TokenType.KEYWORD && tokenizer.keyword() == JackTokenizer.Keyword.ELSE) {
             writeKeywordToken(JackTokenizer.Keyword.ELSE);
             tokenizer.advance();
             writeSymbolToken('{');
-           
-            compileStatements();
-
+            
             tokenizer.advance();
+            compileStatements();
+             
             writeSymbolToken('}');
+            tokenizer.advance();
         }
-
-        xmlWriter.println("</ifStatement>");
     }
 
    /*
@@ -557,6 +575,7 @@ public class CompilationEngine {
 
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.IDENTIFIER) {
             writeIdentifierToken();
+            //get Memory
             String varName = tokenizer.identifier();
 
             tokenizer.advance();
@@ -585,12 +604,15 @@ public class CompilationEngine {
                 tokenizer.advance();
                 writeIdentifierToken();
 
+                String name2 = tokenizer.identifier();
+
+
                 tokenizer.advance();
                 writeSymbolToken('(');
 
                 tokenizer.advance();
-                compileExpressionList();
-                
+                int nArgs = compileExpressionList();
+                vmWriter.writeCall(varName + '.' + name2, nArgs);
                 writeSymbolToken(')');
                 tokenizer.advance();
             }else{
