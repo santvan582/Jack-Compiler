@@ -16,6 +16,7 @@ public class CompilationEngine {
     private final VMWriter vmWriter;
     private final SymbolTable symbolTable;
     private String className;
+    private int labelCounter = 0; // Counter for generating unique labels
     private final HashMap<Character, String> xmlEscapeSymbols = new HashMap<Character, String>() {{
         put('&', "&amp;");
         put('<', "&lt;");
@@ -226,19 +227,15 @@ public class CompilationEngine {
         }
 
 
-         //Should  Write Main.main 0
+         //Should  Write Main.main 2
         //Initialize the function in the VM output with the number of local variables
-        vmWriter.writeFunction(funName,symbolTable.varCount(SymbolTable.KIND.ARG));
+        vmWriter.writeFunction(funName,symbolTable.varCount(SymbolTable.KIND.VAR));
 
-         //METHOD and CONSTRUCTOR load with this pointer and allocate memory for constructor
+         //METHOD and CONSTRUCTOR load with this pointer else allocate memory for constructor
         if (keyword == JackTokenizer.Keyword.METHOD){
-            //A Jack method with k arguments is compiled into a VM function that operates on k + 1 arguments.
-            // The first argument (argument number 0) always refers to the this object.
             vmWriter.writePush(VMWriter.SEGMENT.ARGUMENT, 0);
             vmWriter.writePop(VMWriter.SEGMENT.POINTER,0);
-
         }else if (keyword == JackTokenizer.Keyword.CONSTRUCTOR){
-            //A Jack function or constructor with k arguments is compiled into a VM function that operates on k arguments.
             vmWriter.writePush(VMWriter.SEGMENT.CONSTANT,symbolTable.varCount(SymbolTable.KIND.FIELD));
             vmWriter.writeCall("Memory.alloc", 1);
             vmWriter.writePop(VMWriter.SEGMENT.POINTER,0);
@@ -356,6 +353,14 @@ public class CompilationEngine {
             vmWriter.writeArithmetic(COMMAND.ADD);
             writeSymbolToken(']');
             tokenizer.advance();
+
+
+            vmWriter.writePop(VMWriter.SEGMENT.TEMP,0);
+            //pop base+index into 'that'
+            vmWriter.writePop(VMWriter.SEGMENT.POINTER,1);
+            //pop expression value into *(base+index)
+            vmWriter.writePush(VMWriter.SEGMENT.TEMP,0);
+            vmWriter.writePop(VMWriter.SEGMENT.THAT,0);
         }
 
         writeSymbolToken('=');
@@ -364,6 +369,9 @@ public class CompilationEngine {
         compileExpression();
 
         writeSymbolToken(';');
+
+        vmWriter.writePop(VMWriter.SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)), symbolTable.indexOf(varName));
+
         
 
         xmlWriter.println("</letStatement>");
@@ -385,6 +393,10 @@ public class CompilationEngine {
 
         writeSymbolToken(')');
 
+        vmWriter.writeArithmetic(VMWriter.COMMAND.NOT);
+        String elseLabel = label();
+        vmWriter.writeIf(elseLabel);
+
         tokenizer.advance();
         writeSymbolToken('{');
   
@@ -393,8 +405,9 @@ public class CompilationEngine {
         compileStatements();
 
         writeSymbolToken('}');
-
-
+        String endLabel = label();
+        vmWriter.writeGoto(endLabel);
+        vmWriter.writeLabel(elseLabel);
         tokenizer.advance();
         if (tokenizer.tokenType() == JackTokenizer.TokenType.KEYWORD && tokenizer.keyword() == JackTokenizer.Keyword.ELSE) {
             writeKeywordToken(JackTokenizer.Keyword.ELSE);
@@ -407,6 +420,7 @@ public class CompilationEngine {
             writeSymbolToken('}');
             tokenizer.advance();
         }
+        vmWriter.writeLabel(endLabel);
     }
 
    /*
@@ -416,6 +430,9 @@ public class CompilationEngine {
     public void compileWhile() {
         xmlWriter.println("<whileStatement>");
         writeKeywordToken(JackTokenizer.Keyword.WHILE);
+        String startLabel = label();
+
+        vmWriter.writeLabel(startLabel);
 
         tokenizer.advance();
         writeSymbolToken('(');
@@ -424,6 +441,9 @@ public class CompilationEngine {
         compileExpression();
 
         writeSymbolToken(')');
+        vmWriter.writeArithmetic(VMWriter.COMMAND.NOT);
+        String endLabel = label();
+        vmWriter.writeIf(endLabel);
 
         tokenizer.advance();
         writeSymbolToken('{');
@@ -432,11 +452,13 @@ public class CompilationEngine {
         compileStatements();
 
         writeSymbolToken('}');
+        vmWriter.writeGoto(startLabel);
+        vmWriter.writeLabel(endLabel);
 
         xmlWriter.println("</whileStatement>");
     }
 
-
+ 
 
     /*
      * doStatement: 'do' subroutineCall ';'
@@ -450,7 +472,8 @@ public class CompilationEngine {
         writeIdentifierToken();
 
         //Store Outuput 
-        String name1 = tokenizer.identifier();
+        String name1 = symbolTable.typeOf(tokenizer.identifier());
+        
 
         tokenizer.advance();
 
@@ -529,8 +552,8 @@ public class CompilationEngine {
             writeSymbolToken(tokenizer.symbol());
             //Store the operator for VM command
             VMWriter.COMMAND vmCommand = VMWriter.COMMAND.getCommandFromOp(tokenizer.symbol());
+            
             tokenizer.advance();
-
             compileTerm();
             
             vmWriter.writeArithmetic(vmCommand);
@@ -570,9 +593,16 @@ public class CompilationEngine {
             tokenizer.keyword() == JackTokenizer.Keyword.NULL || 
             tokenizer.keyword() == JackTokenizer.Keyword.THIS) {
 
+            if (tokenizer.keyword() == JackTokenizer.Keyword.TRUE) {
+                vmWriter.writePush(VMWriter.SEGMENT.CONSTANT, 0);
+                vmWriter.writeArithmetic(VMWriter.COMMAND.NOT);
+            } else if (tokenizer.keyword() == JackTokenizer.Keyword.FALSE || tokenizer.keyword() == JackTokenizer.Keyword.NULL) {
+                vmWriter.writePush(VMWriter.SEGMENT.CONSTANT, 0);
+            } else if (tokenizer.keyword() == JackTokenizer.Keyword.THIS) {
+                vmWriter.writePush(VMWriter.SEGMENT.POINTER, 0);
+            }
             writeKeywordToken(tokenizer.keyword());
             tokenizer.advance();
-
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.IDENTIFIER) {
             writeIdentifierToken();
             //get Memory
@@ -629,9 +659,15 @@ public class CompilationEngine {
 
             tokenizer.advance();
         }else if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && (tokenizer.symbol() == '-' || tokenizer.symbol() == '~')) {
+            char ngCommand = tokenizer.symbol(); //Save the symbol for VM command
             writeSymbolToken(tokenizer.symbol());
             tokenizer.advance();
             compileTerm();
+            if (ngCommand == '-'){
+                vmWriter.writeArithmetic(VMWriter.COMMAND.NEG);
+            }else {
+                vmWriter.writeArithmetic(VMWriter.COMMAND.NOT);
+            }
         } else {
             throw new IllegalArgumentException(
                     "Unexpected token in term: " + tokenizer.getCurrentToken());
@@ -712,6 +748,13 @@ public class CompilationEngine {
             return xmlEscapeSymbols.get(value);
         }
         return String.valueOf(value);
+    }
+
+   private String label() {
+        
+        String newLable =  className + "_" + labelCounter;
+        labelCounter++;
+        return newLable;
     }
 
 

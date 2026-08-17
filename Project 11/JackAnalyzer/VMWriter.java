@@ -19,22 +19,22 @@ public class VMWriter {
 
     //Write VM push command
     public void writePush(SEGMENT segment, int index) {
-        printWriter.println("push"+ " " + segment.getSegmentInString() + " " + index);
+        printWriter.println("   "+"push"+ " " + segment.getSegmentInString() + " " + index);
     }
 
     //Write VM pop command
     public void writePop(SEGMENT segment, int index) {
-        printWriter.println("pop"+ " " + segment.getSegmentInString() + " " + index);
+        printWriter.println("   "+"pop"+ " " + segment.getSegmentInString() + " " + index);
     }
   
     //Write VM arithmetic-logical command
     public void writeArithmetic(COMMAND command) {
         if(command == COMMAND.MULTIPLY) {
-            printWriter.println("call Math.multiply 2");
+            printWriter.println("   "+"call Math.multiply 2");
         } else if(command == COMMAND.DIVIDE) {
-            printWriter.println("call Math.divide 2");
+            printWriter.println("   "+"call Math.divide 2");
         } else {
-            printWriter.println(command.getCommandInString());
+            printWriter.println("   "+command.getCommandInString());
         }
     }
 
@@ -45,16 +45,16 @@ public class VMWriter {
     
     //Write VM goto command
     public void writeGoto(String label) {
-        printWriter.println("goto" + " " + label);
+        printWriter.println("   "+"goto" + " " + label);
     }
 
     //Write VM if-goto command
     public void writeIf(String label) {
-        printWriter.println("if-goto" + " " + label);
+        printWriter.println("   "+"if-goto" + " " + label);
     }
 
     public void writeCall(String name, int nArgs) {
-        printWriter.println("call" + " " + name + " " + nArgs);
+        printWriter.println("   "+"call" + " " + name + " " + nArgs);
     }
 
     public void writeFunction(String name, int nLocals) {
@@ -62,7 +62,7 @@ public class VMWriter {
     }
 
     public void writeReturn() {
-        printWriter.println("return");
+        printWriter.println("   "+"return");
     }
 
     //Closes the output file
@@ -163,6 +163,8 @@ public class VMWriter {
 
             public static COMMAND getCommandFromOp(char symbol) {
             switch (symbol) {
+                case '~':
+                    return NOT;
                 case '+':
                     return ADD;
                 case '-':

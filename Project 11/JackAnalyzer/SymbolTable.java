@@ -78,7 +78,7 @@ public class SymbolTable {
       } else if (subroutineSymbols.containsKey(name)) {
           return subroutineSymbols.get(name).getType();
       }
-      return "";
+      return name;
   }
 
 
@@ -90,6 +90,21 @@ public class SymbolTable {
           return subroutineSymbols.get(name).getIndex();
       }
       return -1;
+  }
+
+  public String getMethodName(String name) {
+    
+    for (String key : classSymbols.keySet()) {
+        if (key.compareToIgnoreCase(name) == 0) {
+            return key;
+        }
+    }
+    for (String key : subroutineSymbols.keySet()) {
+        if (key.compareToIgnoreCase(name) == 0) {
+            return key;
+        }
+    }
+      return name;
   }
 
 
