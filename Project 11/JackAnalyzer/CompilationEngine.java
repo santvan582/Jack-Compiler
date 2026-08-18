@@ -343,6 +343,8 @@ public class CompilationEngine {
 
         tokenizer.advance();
 
+        boolean isArrayAssignment = false;
+
         while (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '[') {
             writeSymbolToken('[');
     
@@ -351,17 +353,12 @@ public class CompilationEngine {
             tokenizer.advance();
             compileExpression();
 
-            vmWriter.writeArithmetic(COMMAND.ADD);
+            vmWriter.writeArithmetic(VMWriter.COMMAND.ADD);
             writeSymbolToken(']');
             tokenizer.advance();
 
-
-            vmWriter.writePop(VMWriter.SEGMENT.TEMP,0);
-            //pop base+index into 'that'
-            vmWriter.writePop(VMWriter.SEGMENT.POINTER,1);
-            //pop expression value into *(base+index)
-            vmWriter.writePush(VMWriter.SEGMENT.TEMP,0);
-            vmWriter.writePop(VMWriter.SEGMENT.THAT,0);
+            // address (base+index) stays on the stack until the RHS is compiled below
+            isArrayAssignment = true;
         }
 
         writeSymbolToken('=');
@@ -371,9 +368,14 @@ public class CompilationEngine {
 
         writeSymbolToken(';');
 
-
-
-        vmWriter.writePop(VMWriter.SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)), symbolTable.indexOf(varName));
+        if (isArrayAssignment) {
+            vmWriter.writePop(VMWriter.SEGMENT.TEMP,0);
+            vmWriter.writePop(VMWriter.SEGMENT.POINTER,1);
+            vmWriter.writePush(VMWriter.SEGMENT.TEMP,0);
+            vmWriter.writePop(VMWriter.SEGMENT.THAT,0);
+        } else {
+            vmWriter.writePop(VMWriter.SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)), symbolTable.indexOf(varName));
+        }
 
         
 
