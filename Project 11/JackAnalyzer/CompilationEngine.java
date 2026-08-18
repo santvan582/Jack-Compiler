@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.util.HashMap;
 
+import JackAnalyzer.SymbolTable.KIND;
 import JackAnalyzer.VMWriter.COMMAND;
 import JackAnalyzer.VMWriter.SEGMENT;
 
@@ -370,6 +371,8 @@ public class CompilationEngine {
 
         writeSymbolToken(';');
 
+
+
         vmWriter.writePop(VMWriter.SEGMENT.getSegmentFromKind(symbolTable.kindOf(varName)), symbolTable.indexOf(varName));
 
         
@@ -470,7 +473,7 @@ public class CompilationEngine {
 
         tokenizer.advance();
         writeIdentifierToken();
-
+         String objName = tokenizer.identifier();
         //Store Outuput 
         String name1 = symbolTable.typeOf(tokenizer.identifier());
         
@@ -482,10 +485,11 @@ public class CompilationEngine {
             vmWriter.writePush(VMWriter.SEGMENT.POINTER,0);
 
             tokenizer.advance();
-            compileExpressionList();
+            int nArgs = compileExpressionList() + 1;
 
          
             writeSymbolToken(')');
+            vmWriter.writeCall(className + '.' + objName, nArgs);
            
         } else if (tokenizer.tokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.symbol() == '.') {
             writeSymbolToken('.');
@@ -500,11 +504,17 @@ public class CompilationEngine {
             writeSymbolToken('(');
          
            tokenizer.advance();
-           int nArgs = compileExpressionList();
+           int nArgs = compileExpressionList() ; // Add 1 for the object reference
        
            writeSymbolToken(')');
            String fullName = name1 + "." + name2;
-            vmWriter.writeCall(fullName, nArgs);
+           KIND mobjKind = symbolTable.kindOf(objName);
+           if (mobjKind != KIND.NONE) {
+             nArgs++; // Increment nArgs for the object reference
+             vmWriter.writePush(SEGMENT.getSegmentFromKind(mobjKind), symbolTable.indexOf(objName));
+           }
+           
+           vmWriter.writeCall(fullName, nArgs);
         } else {
             throw new IllegalArgumentException(
                     "Expected '(' or '.' after subroutine name, but found: " + tokenizer.getCurrentToken());
